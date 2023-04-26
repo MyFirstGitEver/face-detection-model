@@ -1,5 +1,6 @@
 package org.example;
 
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -16,11 +17,12 @@ class Classifier {
 }
 
 public class AdaBoost{
-    private Pair<Vector, Float>[] dataset;
+    private final Pair<Vector, Float>[] dataset;
+    private final float[] weights;
     private int positiveCount, negativeCount;
-    private float[] thresholds;
-    private List<Classifier> classifiers;
-    AdaBoost(Pair<Vector, Float>[] dataset) {
+    private final float[] thresholds;
+    private final List<Classifier> classifiers;
+    AdaBoost(Pair<Vector, Float>[] dataset) throws IOException {
         this.dataset = dataset;
         this.thresholds = new float[dataset[0].first.size()];
         this.classifiers = new ArrayList<>();
@@ -36,6 +38,13 @@ public class AdaBoost{
 
         for(int i=0;i<thresholds.length;i++) {
             thresholds[i] = getThreshold(i);
+        }
+
+        weights = new float[dataset.length];
+
+        loadPrams();
+        for(int i=0;i<weights.length;i++){
+            weights[i] = w(dataset[i].first);
         }
     }
 
@@ -74,12 +83,18 @@ public class AdaBoost{
         return dataset[choice].first.x(i);
     }
 
-    public void train(int num) {
+    public void train(int num) throws IOException {
         for(int iteration=0;iteration<num;iteration++) {
+            if(iteration != 0 && iteration % 5 == 0){
+                saveParams();
+            }
+
             float totalWeight = 0;
 
-            for(Pair<Vector, Float> p : dataset) {
-                totalWeight += Math.exp(-p.second * w(p.first));
+            for(int i=0;i<dataset.length;i++) {
+                Pair<Vector, Float> p = dataset[i];
+
+                totalWeight += Math.exp(-p.second * weights[i]);
             }
 
             int index = 0;
@@ -87,14 +102,16 @@ public class AdaBoost{
             for(int i=0;i<thresholds.length;i++) {
                 float minError = 0;
 
-                for(Pair<Vector, Float> p : dataset) {
+                for(int j=0;j<dataset.length;j++) {
+                    Pair<Vector, Float> p = dataset[j];
+
                     int temp = 1;
                     if(p.first.x(i) <= thresholds[i]){
                         temp = -1;
                     }
 
                     if(temp * p.second < 0) {
-                        minError += Math.exp(-p.second * w(p.first));
+                        minError += Math.exp(-p.second * weights[j]);
                     }
                 }
 
@@ -104,15 +121,47 @@ public class AdaBoost{
                 }
             }
 
-            min = min / totalWeight + 0.000001f;
+            min = min / totalWeight + 0.00001f;
             double alpha = Math.log((1 - min) / min) / 2;
 
-            if(Double.isNaN(alpha)){
-                return;
-            }
+            Classifier last = new Classifier((float) alpha, index);
+            classifiers.add(last);
 
-            classifiers.add(new Classifier((float) alpha, index));
+            for(int i=0;i<weights.length;i++) {
+                int temp = dataset[i].first.x(last.index) <= thresholds[last.index] ? -1 : 1;
+
+                weights[i] += temp * last.weight;
+            }
         }
+    }
+
+    private void loadPrams() throws IOException {
+        if(!new File("params").exists()){
+            return;
+        }
+
+        BufferedReader reader = new BufferedReader(new FileReader("params"));
+
+        String line;
+        while((line = reader.readLine()) != null) {
+            String[] params = line.split("\t");
+            classifiers.add(new Classifier(
+                    Float.parseFloat(params[1]),
+                    Integer.parseInt(params[0])));
+        }
+
+        reader.close();
+    }
+
+    private void saveParams() throws IOException {
+        BufferedWriter writer = new BufferedWriter(new FileWriter("params"));
+
+        for(Classifier classifier : classifiers) {
+            writer.write(classifier.index + "\t" + classifier.weight);
+            writer.newLine();
+        }
+
+        writer.close();
     }
 
     public boolean isPositive(Vector v) {
@@ -140,12 +189,12 @@ public class AdaBoost{
 
     private float w(Vector v){
         if(classifiers.size() == 0) {
-            return 1;
+            return (float) 1 / dataset.length;
         }
 
         float pred = 0;
 
-        for(Classifier classifier : classifiers){
+        for(Classifier classifier : classifiers) {
             int temp = v.x(classifier.index) <= thresholds[classifier.index] ? -1 : 1;
 
             pred += temp * classifier.weight;

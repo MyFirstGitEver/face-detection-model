@@ -2,7 +2,6 @@ package org.example;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.util.Stack;
 
 public class Main {
     static String getId(int i){
@@ -48,8 +47,7 @@ public class Main {
         }
 
         AdaBoost model = new AdaBoost(dataset);
-        model.train(50);
-
+        //model.train(3000);
         test(model, personCount, nonPersonCount);
         //nonFace();
     }
