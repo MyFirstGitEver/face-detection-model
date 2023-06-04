@@ -85,7 +85,8 @@ public class AdaBoost{
 
     public void train(int num) throws IOException {
         for(int iteration=0;iteration<num;iteration++) {
-            if(iteration != 0 && iteration % 5 == 0){
+            if(iteration != 0 && iteration % 5 == 0) {
+                System.out.println(iteration + " iterations have passed!");
                 saveParams();
             }
 
